@@ -108,21 +108,29 @@ router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) =>
         console.log('Test connection - app_password first4:', credentials.application_password?.substring(0, 4));
         console.log('Test connection - site_url:', connection.site_url);
 
-        // Direct fetch test to debug auth
+            // Direct fetch test to debug auth - check for redirects and try without spaces
         try {
                 const directUrl = `${connection.site_url.replace(/\/+$/, '')}/wp-json/wp/v2/users/me`;
-                const encoded = Buffer.from(`${credentials.username}:${credentials.application_password}`).toString('base64');
+                const pwNoSpaces = credentials.application_password.replace(/\s/g, '');
+                const encoded = Buffer.from(`${credentials.username}:${pwNoSpaces}`).toString('base64');
                 console.log('Direct fetch test - URL:', directUrl);
-                console.log('Direct fetch test - Auth header:', `Basic ${encoded.substring(0, 10)}...`);
+                console.log('Direct fetch test - pw with spaces len:', credentials.application_password.length, 'without:', pwNoSpaces.length);
+
+                // Test 1: no-redirect to check for redirects
+                const noRedirectResp = await fetch(directUrl, {
+                          headers: { 'Authorization': `Basic ${encoded}`, 'Content-Type': 'application/json' },
+                          redirect: 'manual',
+                });
+                console.log('Direct fetch (no-redirect) - status:', noRedirectResp.status);
+                console.log('Direct fetch (no-redirect) - location:', noRedirectResp.headers.get('location'));
+
+                // Test 2: follow redirects with space-stripped password
                 const directResp = await fetch(directUrl, {
-                          headers: {
-                                      'Authorization': `Basic ${encoded}`,
-                                      'Content-Type': 'application/json',
-                          },
+                          headers: { 'Authorization': `Basic ${encoded}`, 'Content-Type': 'application/json' },
                 });
                 const directBody = await directResp.text();
-                console.log('Direct fetch test - status:', directResp.status);
-                console.log('Direct fetch test - body:', directBody.substring(0, 200));
+                console.log('Direct fetch (no-spaces) - status:', directResp.status);
+                console.log('Direct fetch (no-spaces) - body:', directBody.substring(0, 200));
         } catch (directErr) {
                 console.error('Direct fetch test error:', directErr);
         }
