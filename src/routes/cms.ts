@@ -9,189 +9,150 @@ const router = Router();
 
 // GET /cms/platforms — list supported platforms
 router.get('/platforms', (_req, res: Response) => {
-  res.json({ platforms: getSupportedPlatforms() });
+    res.json({ platforms: getSupportedPlatforms() });
 });
 
 // POST /cms/connect — connect a new CMS instance
 router.post('/connect', requireAuth, async (req: AuthRequest, res: Response) => {
-  const { platform, site_url, credentials } = req.body as ConnectCMSRequest;
+    const { platform, site_url, credentials } = req.body as ConnectCMSRequest;
 
-  if (!platform || !site_url || !credentials) {
-    res.status(400).json({ error: 'platform, site_url, and credentials are required' });
-    return;
-  }
+              if (!platform || !site_url || !credentials) {
+                    res.status(400).json({ error: 'platform, site_url, and credentials are required' });
+                    return;
+              }
 
-  try {
-    const adapter = createAdapter(platform);
-    const result = await adapter.connect({ site_url, credentials });
+              try {
+                    const adapter = createAdapter(platform);
+                    const result = await adapter.connect({ site_url, credentials });
+                    if (!result.success) {
+                            res.status(400).json({ error: `Connection failed: ${result.error}` });
+                            return;
+                    }
 
-    if (!result.success) {
-      res.status(400).json({ error: `Connection failed: ${result.error}` });
-      return;
-    }
+      // Fetch CMS schema
+      const schema = await adapter.fetchSchema().catch(() => null);
 
-    // Fetch CMS schema
-    const schema = await adapter.fetchSchema().catch(() => null);
+      // Encrypt credentials before storing
+      const credentialsEncrypted = encrypt(JSON.stringify(credentials));
 
-    // Encrypt credentials before storing
-    const credentialsEncrypted = encrypt(JSON.stringify(credentials));
+      const { data: connection, error } = await supabase
+                      .from('cms_connections')
+                      .upsert(
+                        {
+                                    user_id: req.userId,
+                                    platform,
+                                    site_url: site_url.replace(/\/+$/, ''),
+                                    site_name: result.site_name,
+                                    credentials_encrypted: credentialsEncrypted,
+                                    schema_cache: schema,
+                                    is_active: true,
+                                    last_synced_at: new Date().toISOString(),
+                        },
+                        { onConflict: 'user_id,platform,site_url' }
+                              )
+                      .select('id, platform, site_url, site_name, is_active, schema_cache, created_at')
+                      .single();
 
-    const { data: connection, error } = await supabase
-      .from('cms_connections')
-      .upsert(
-        {
-          user_id: req.userId,
-          platform,
-          site_url: site_url.replace(/\/+$/, ''),
-          site_name: result.site_name,
-          credentials_encrypted: credentialsEncrypted,
-          schema_cache: schema,
-          is_active: true,
-          last_synced_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,platform,site_url' }
-      )
-      .select('id, platform, site_url, site_name, is_active, schema_cache, created_at')
-      .single();
-
-    if (error) throw error;
-
-    res.status(201).json({ connection });
-  } catch (err) {
-    console.error('CMS connect error:', err);
-    res.status(500).json({ error: 'Failed to connect CMS' });
-  }
+      if (error) throw error;
+                    res.status(201).json({ connection });
+              } catch (err) {
+                    console.error('CMS connect error:', err);
+                    res.status(500).json({ error: 'Failed to connect CMS' });
+              }
 });
 
 // GET /cms/connections — list user's CMS connections
 router.get('/connections', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { data: connections, error } = await supabase
-      .from('cms_connections')
-      .select('id, platform, site_url, site_name, is_active, schema_cache, last_synced_at, created_at')
-      .eq('user_id', req.userId)
-      .order('created_at', { ascending: false });
+    try {
+          const { data: connections, error } = await supabase
+            .from('cms_connections')
+            .select('id, platform, site_url, site_name, is_active, schema_cache, last_synced_at, created_at')
+            .eq('user_id', req.userId)
+            .order('created_at', { ascending: false });
 
-    if (error) throw error;
-
-    res.json({ connections: connections || [] });
-  } catch (err) {
-    console.error('List connections error:', err);
-    res.status(500).json({ error: 'Failed to fetch connections' });
-  }
+      if (error) throw error;
+          res.json({ connections: connections || [] });
+    } catch (err) {
+          console.error('List connections error:', err);
+          res.status(500).json({ error: 'Failed to fetch connections' });
+    }
 });
 
 // POST /cms/:id/test — test a connection is still valid
 router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { data: connection, error } = await supabase
-      .from('cms_connections')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.userId)
-      .single();
+    try {
+          const { data: connection, error } = await supabase
+            .from('cms_connections')
+            .select('*')
+            .eq('id', req.params.id)
+            .eq('user_id', req.userId)
+            .single();
 
-    if (error || !connection) {
-      res.status(404).json({ error: 'Connection not found' });
-      return;
+      if (error || !connection) {
+              res.status(404).json({ error: 'Connection not found' });
+              return;
+      }
+
+      const credentials = JSON.parse(decrypt(connection.credentials_encrypted));
+          const adapter = createAdapter(connection.platform);
+          await adapter.connect({ site_url: connection.site_url, credentials });
+
+      const isValid = await adapter.testConnection();
+          res.json({ valid: isValid });
+    } catch (err) {
+          console.error('Test connection error:', err);
+          res.status(500).json({ error: 'Connection test failed' });
     }
-
-    const credentials = JSON.parse(decrypt(connection.credentials_encrypted));
-    const adapter = createAdapter(connection.platform);
-    await adapter.connect({ site_url: connection.site_url, credentials });
-    console.log('Test connection - credential keys:', Object.keys(credentials));
-    console.log('Test connection - has username:', !!credentials.username);
-    console.log('Test connection - has application_password:', !!credentials.application_password);
-    console.log('Test connection - has password:', !!credentials.password);
-        console.log('Test connection - username value:', credentials.username);
-        console.log('Test connection - app_password length:', credentials.application_password?.length);
-        console.log('Test connection - app_password first4:', credentials.application_password?.substring(0, 4));
-        console.log('Test connection - site_url:', connection.site_url);
-
-            // Direct fetch test to debug auth - check for redirects and try without spaces
-        try {
-                const directUrl = `${connection.site_url.replace(/\/+$/, '')}/wp-json/wp/v2/users/me`;
-                const pwNoSpaces = credentials.application_password.replace(/\s/g, '');
-                const encoded = Buffer.from(`${credentials.username}:${pwNoSpaces}`).toString('base64');
-                console.log('Direct fetch test - URL:', directUrl);
-                console.log('Direct fetch test - pw with spaces len:', credentials.application_password.length, 'without:', pwNoSpaces.length);
-
-                // Test 1: no-redirect to check for redirects
-                const noRedirectResp = await fetch(directUrl, {
-                          headers: { 'Authorization': `Basic ${encoded}`, 'Content-Type': 'application/json' },
-                          redirect: 'manual',
-                });
-                console.log('Direct fetch (no-redirect) - status:', noRedirectResp.status);
-                console.log('Direct fetch (no-redirect) - location:', noRedirectResp.headers.get('location'));
-
-                // Test 2: follow redirects with space-stripped password
-                const directResp = await fetch(directUrl, {
-                          headers: { 'Authorization': `Basic ${encoded}`, 'Content-Type': 'application/json' },
-                });
-                const directBody = await directResp.text();
-                console.log('Direct fetch (no-spaces) - status:', directResp.status);
-                console.log('Direct fetch (no-spaces) - body:', directBody.substring(0, 200));
-        } catch (directErr) {
-                console.error('Direct fetch test error:', directErr);
-        }
-    const isValid = await adapter.testConnection();
-    console.log('Test connection result:', isValid);
-
-    res.json({ valid: isValid });
-  } catch (err) {
-    console.error('Test connection error:', err);
-    res.status(500).json({ error: 'Connection test failed' });
-  }
 });
 
 // POST /cms/:id/sync-schema — refresh the CMS schema cache
 router.post('/:id/sync-schema', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { data: connection, error } = await supabase
-      .from('cms_connections')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.userId)
-      .single();
+    try {
+          const { data: connection, error } = await supabase
+            .from('cms_connections')
+            .select('*')
+            .eq('id', req.params.id)
+            .eq('user_id', req.userId)
+            .single();
 
-    if (error || !connection) {
-      res.status(404).json({ error: 'Connection not found' });
-      return;
+      if (error || !connection) {
+              res.status(404).json({ error: 'Connection not found' });
+              return;
+      }
+
+      const credentials = JSON.parse(decrypt(connection.credentials_encrypted));
+          const adapter = createAdapter(connection.platform);
+          await adapter.connect({ site_url: connection.site_url, credentials });
+
+      const schema = await adapter.fetchSchema();
+
+      await supabase
+            .from('cms_connections')
+            .update({ schema_cache: schema, last_synced_at: new Date().toISOString() })
+            .eq('id', connection.id);
+
+      res.json({ schema });
+    } catch (err) {
+          console.error('Sync schema error:', err);
+          res.status(500).json({ error: 'Failed to sync schema' });
     }
-
-    const credentials = JSON.parse(decrypt(connection.credentials_encrypted));
-    const adapter = createAdapter(connection.platform);
-    await adapter.connect({ site_url: connection.site_url, credentials });
-    const schema = await adapter.fetchSchema();
-
-    await supabase
-      .from('cms_connections')
-      .update({ schema_cache: schema, last_synced_at: new Date().toISOString() })
-      .eq('id', connection.id);
-
-    res.json({ schema });
-  } catch (err) {
-    console.error('Sync schema error:', err);
-    res.status(500).json({ error: 'Failed to sync schema' });
-  }
 });
 
 // DELETE /cms/:id — disconnect a CMS
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { error } = await supabase
-      .from('cms_connections')
-      .delete()
-      .eq('id', req.params.id)
-      .eq('user_id', req.userId);
+    try {
+          const { error } = await supabase
+            .from('cms_connections')
+            .delete()
+            .eq('id', req.params.id)
+            .eq('user_id', req.userId);
 
-    if (error) throw error;
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Delete connection error:', err);
-    res.status(500).json({ error: 'Failed to disconnect CMS' });
-  }
+      if (error) throw error;
+          res.json({ success: true });
+    } catch (err) {
+          console.error('Delete connection error:', err);
+          res.status(500).json({ error: 'Failed to disconnect CMS' });
+    }
 });
 
 export default router;
