@@ -13,7 +13,7 @@ import type {
 
 interface WPPost {
       id: number;
-      link: string;
+      link: string
       title: { rendered: string };
       content: { rendered: string };
       excerpt: { rendered: string };
@@ -60,8 +60,9 @@ export class WordPressAdapter extends BaseCMSAdapter {
           try {
                     await this.wpApi<{ id: number }>('/wp-json/wp/v2/users/me');
                     return true;
-          } catch {
-                    return false;
+          } catch (err) {
+                            console.error('WordPress testConnection error:', err instanceof Error ? err.message : err);
+                            return false;
           }
   }
 
