@@ -222,3 +222,46 @@ export interface SyncRequest {
   fields?: Partial<PublishableContent>;
   resolve_missing?: Record<string, unknown>;
 }
+
+
+// ============================================================
+// Google Search Console
+// ============================================================
+
+export interface GSCSiteEntry {
+    site_url: string;
+    permission_level: string;
+}
+
+export interface GSCSearchAnalyticsRow {
+    keys: string[];
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+}
+
+export interface GSCDimensionFilter {
+    dimension: string;
+    operator?: string;
+    expression: string;
+}
+
+export interface GSCQueryParams {
+    start_date: string;
+    end_date: string;
+    dimensions?: string[];
+    dimension_filters?: GSCDimensionFilter[];
+    row_limit?: number;
+    start_row?: number;
+}
+
+export interface GSCConnection {
+    id: string;
+    user_id: string;
+    site_url: string;
+    google_access_token_encrypted: string;
+    google_refresh_token_encrypted: string;
+    created_at: string;
+    updated_at: string;
+}
