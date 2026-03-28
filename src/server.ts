@@ -7,6 +7,7 @@ import authRoutes from './routes/auth';
 import cmsRoutes from './routes/cms';
 import contentRoutes from './routes/content';
 import publishRoutes from './routes/publish';
+import gscRoutes from './routes/gsc';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/auth', authRoutes);
 app.use('/api/cms', cmsRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/publish', publishRoutes);
+app.use('/api/gsc', gscRoutes);
 
 // --- Error handler ---
 app.use(errorHandler);
