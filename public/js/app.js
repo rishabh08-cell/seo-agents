@@ -72,7 +72,7 @@ const App = {
         const site_url = document.getElementById('cmsSiteUrl').value;
         let credentials = {};
         if (platform === 'wordpress') {
-          credentials = { username: document.getElementById('cmsUser').value, password: document.getElementById('cmsPass').value };
+          credentials = { username: document.getElementById('cmsUser').value, application_password: document.getElementById('cmsPass').value };
         } else {
           credentials = { api_token: document.getElementById('cmsToken').value };
         }
