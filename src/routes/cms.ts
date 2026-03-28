@@ -103,6 +103,10 @@ router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) =>
     console.log('Test connection - has username:', !!credentials.username);
     console.log('Test connection - has application_password:', !!credentials.application_password);
     console.log('Test connection - has password:', !!credentials.password);
+        console.log('Test connection - username value:', credentials.username);
+        console.log('Test connection - app_password length:', credentials.application_password?.length);
+        console.log('Test connection - app_password first4:', credentials.application_password?.substring(0, 4));
+        console.log('Test connection - site_url:', connection.site_url);
     const isValid = await adapter.testConnection();
     console.log('Test connection result:', isValid);
 
