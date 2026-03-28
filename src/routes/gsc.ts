@@ -19,14 +19,14 @@ router.get('/callback', requireAuth, async (req: AuthRequest, res: Response) => 
     await supabase.from('users').update({
       google_access_token: encrypt(tokens.access_token),
       google_refresh_token: tokens.refresh_token ? encrypt(tokens.refresh_token) : null
-    }).eq('id', req.userId!);
+    }).eq('id', req.userId as string);
     res.json({ success: true });
   } catch (err) { console.error('GSC callback error:', err); res.status(500).json({ error: 'OAuth failed' }); }
 });
 
 router.get('/sites', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const client = await getClientForUser(req.userId!);
+    const client = await getClientForUser(req.userId as string);
     if (!client) { res.status(401).json({ error: 'Google not connected' }); return; }
     res.json({ sites: await client.listSites() });
   } catch (err) { console.error('GSC sites error:', err); res.status(500).json({ error: 'Failed to list sites' }); }
@@ -36,10 +36,10 @@ router.post('/connect', requireAuth, async (req: AuthRequest, res: Response) => 
   const { site_url } = req.body;
   if (!site_url) { res.status(400).json({ error: 'site_url required' }); return; }
   try {
-    const { data: user } = await supabase.from('users').select('google_access_token, google_refresh_token').eq('id', req.userId!).single();
+    const { data: user } = await supabase.from('users').select('google_access_token, google_refresh_token').eq('id', req.userId as string).single();
     if (!user?.google_access_token) { res.status(401).json({ error: 'Google not connected' }); return; }
     const { data, error } = await supabase.from('gsc_connections').upsert({
-      user_id: req.userId!,
+      user_id: req.userId as string,
       site_url,
       google_access_token_encrypted: user.google_access_token,
       google_refresh_token_encrypted: user.google_refresh_token || ''
@@ -51,7 +51,7 @@ router.post('/connect', requireAuth, async (req: AuthRequest, res: Response) => 
 
 router.get('/connections', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { data, error } = await supabase.from('gsc_connections').select('id, site_url, created_at').eq('user_id', req.userId!).order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('gsc_connections').select('id, site_url, created_at').eq('user_id', req.userId as string).order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ connections: data || [] });
   } catch (err) { console.error('GSC connections error:', err); res.status(500).json({ error: 'Failed to fetch connections' }); }
@@ -59,7 +59,7 @@ router.get('/connections', requireAuth, async (req: AuthRequest, res: Response) 
 
 router.post('/:id/query', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const conn = await getGSCConnection(req.params.id, req.userId!);
+    const conn = await getGSCConnection(req.params.id as string, req.userId as string);
     if (!conn) { res.status(404).json({ error: 'Not found' }); return; }
     const { start_date, end_date, dimensions, dimension_filters, row_limit } = req.body;
     if (!start_date || !end_date) { res.status(400).json({ error: 'start_date and end_date required' }); return; }
@@ -70,7 +70,7 @@ router.post('/:id/query', requireAuth, async (req: AuthRequest, res: Response) =
 
 router.get('/:id/top-pages', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const conn = await getGSCConnection(req.params.id, req.userId!);
+    const conn = await getGSCConnection(req.params.id as string, req.userId as string);
     if (!conn) { res.status(404).json({ error: 'Not found' }); return; }
     const { startDate, endDate } = dateRange(parseInt(req.query.days as string) || 28);
     const rows = await buildClient(conn).topPages(conn.site_url, startDate, endDate, parseInt(req.query.limit as string) || 50);
@@ -80,7 +80,7 @@ router.get('/:id/top-pages', requireAuth, async (req: AuthRequest, res: Response
 
 router.get('/:id/page-queries', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const conn = await getGSCConnection(req.params.id, req.userId!);
+    const conn = await getGSCConnection(req.params.id as string, req.userId as string);
     if (!conn) { res.status(404).json({ error: 'Not found' }); return; }
     const pageUrl = req.query.url as string;
     if (!pageUrl) { res.status(400).json({ error: 'url param required' }); return; }
@@ -92,7 +92,7 @@ router.get('/:id/page-queries', requireAuth, async (req: AuthRequest, res: Respo
 
 router.get('/:id/performance', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const conn = await getGSCConnection(req.params.id, req.userId!);
+    const conn = await getGSCConnection(req.params.id as string, req.userId as string);
     if (!conn) { res.status(404).json({ error: 'Not found' }); return; }
     const { startDate, endDate } = dateRange(parseInt(req.query.days as string) || 28);
     const rows = await buildClient(conn).performanceByDate(conn.site_url, startDate, endDate);
@@ -102,7 +102,7 @@ router.get('/:id/performance', requireAuth, async (req: AuthRequest, res: Respon
 
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { error } = await supabase.from('gsc_connections').delete().eq('id', req.params.id).eq('user_id', req.userId!);
+    const { error } = await supabase.from('gsc_connections').delete().eq('id', req.params.id as string).eq('user_id', req.userId as string);
     if (error) throw error;
     res.json({ success: true });
   } catch (err) { console.error('GSC delete error:', err); res.status(500).json({ error: 'Failed' }); }
