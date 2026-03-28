@@ -282,7 +282,7 @@ export class WordPressAdapter extends BaseCMSAdapter {
                   let url = this.buildUrl(path);
 
                   // Embed credentials in URL for servers that strip Authorization header
-                  if (username && cleanPw) {
+                  if (username && cleanPw && path !== '/wp-json') {
                               const urlObj = new URL(url);
                               urlObj.username = username;
                               urlObj.password = cleanPw;
