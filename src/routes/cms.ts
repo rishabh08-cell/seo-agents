@@ -99,7 +99,12 @@ router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) =>
     const credentials = JSON.parse(decrypt(connection.credentials_encrypted));
     const adapter = createAdapter(connection.platform);
     await adapter.connect({ site_url: connection.site_url, credentials });
+    console.log('Test connection - credential keys:', Object.keys(credentials));
+    console.log('Test connection - has username:', !!credentials.username);
+    console.log('Test connection - has application_password:', !!credentials.application_password);
+    console.log('Test connection - has password:', !!credentials.password);
     const isValid = await adapter.testConnection();
+    console.log('Test connection result:', isValid);
 
     res.json({ valid: isValid });
   } catch (err) {
