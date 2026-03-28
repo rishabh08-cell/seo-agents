@@ -269,6 +269,42 @@ export class WordPressAdapter extends BaseCMSAdapter {
           return {};
   }
 
+        /**
+           * Override rawApiRequest to embed credentials in URL for servers
+              * that strip the Authorization header (Apache CGI/FastCGI).
+                 */
+        protected async rawApiRequest<T>(
+                  path: string,
+                  options: RequestInit = {}
+                ): Promise<T> {
+                  const { username, application_password } = this.credentials;
+                  const cleanPw = application_password ? application_password.replace(/\s/g, '') : '';
+                  let url = this.buildUrl(path);
+
+                  // Embed credentials in URL for servers that strip Authorization header
+                  if (username && cleanPw) {
+                              const urlObj = new URL(url);
+                              urlObj.username = username;
+                              urlObj.password = cleanPw;
+                              url = urlObj.toString();
+                  }
+
+                  const headers: Record<string, string> = {
+                              'Content-Type': 'application/json',
+                              ...this.getAuthHeaders(),
+                              ...(options.headers as Record<string, string> || {}),
+                  };
+
+                  const response = await fetch(url, { ...options, headers });
+
+                  if (!response.ok) {
+                              const errorBody = await response.text().catch(() => 'Unknown error');
+                              throw new Error(`${this.platform} API error (${response.status}): ${errorBody}`);
+                  }
+
+                  return response.json() as Promise<T>;
+        }
+
   private async wpApi<T>(path: string, options: RequestInit = {}): Promise<T> {
           return this.apiRequest<T>(path, options);
   }
