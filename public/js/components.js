@@ -50,6 +50,7 @@ const UI = {
       '<a href="#/content" class="' + (active === 'content' ? 'active' : '') + '"><span class="icon">\u{1F4DD}</span> Content Sources</a>' +
       '<a href="#/publish" class="' + (active === 'publish' ? 'active' : '') + '"><span class="icon">\u{1F680}</span> Publish</a>' +
       '<a href="#/publications" class="' + (active === 'publications' ? 'active' : '') + '"><span class="icon">\u{1F4E6}</span> Publications</a>' +
+      '<a href="#/gsc" class="' + (active === 'gsc' ? 'active' : '') + '"><span class="icon">\u{1F50D}</span> Search Console</a>' +
       '</nav>' +
       '<div class="user-section">' +
       '<div class="avatar">' + initial + '</div>' +
@@ -74,6 +75,7 @@ const UI = {
       '<div style="display:flex;gap:12px">' +
       '<a href="#/connections" class="btn btn-primary">Connect CMS</a>' +
       '<a href="#/publish" class="btn btn-secondary">Publish Content</a>' +
+      '<a href="#/gsc" class="btn btn-secondary">Search Console</a>' +
       '</div></div>';
   },
 
@@ -102,7 +104,8 @@ const UI = {
       });
     }
     return '<div class="page-header"><div><h2>CMS Connections</h2><p>Manage your connected CMS platforms</p></div>' +
-      '<button class="btn btn-primary" onclick="App.showConnectModal()">+ Connect CMS</button></div>' + list;
+      '<button class="btn btn-primary" onclick="App.showConnectModal()">+ Connect CMS</button></div>' +
+      list;
   },
 
   connectModal() {
@@ -147,7 +150,8 @@ const UI = {
       });
     }
     return '<div class="page-header"><div><h2>Content Sources</h2><p>Manage your content sources</p></div>' +
-      '<button class="btn btn-primary" onclick="App.showSourceModal()">+ Add Source</button></div>' + list;
+      '<button class="btn btn-primary" onclick="App.showSourceModal()">+ Add Source</button></div>' +
+      list;
   },
 
   sourceModal() {
@@ -166,7 +170,9 @@ const UI = {
   publishPage(connections) {
     let connOpts = '';
     if (connections && connections.length > 0) {
-      connections.forEach(c => { connOpts += '<option value="' + c.id + '">' + (c.site_name || c.platform) + ' (' + c.platform + ')</option>'; });
+      connections.forEach(c => {
+        connOpts += '<option value="' + c.id + '">' + (c.site_name || c.platform) + ' (' + c.platform + ')</option>';
+      });
     }
     return '<div class="page-header"><div><h2>Publish Content</h2><p>Prepare and publish content to your CMS</p></div></div>' +
       '<div class="card"><div class="card-header"><h3>Content</h3></div>' +
@@ -177,7 +183,9 @@ const UI = {
       '<div class="form-group"><label>Excerpt</label><textarea id="pubExcerpt" style="min-height:60px" placeholder="Brief summary..."></textarea></div>' +
       '<div class="form-group"><label>Meta Title</label><input type="text" id="pubMetaTitle" placeholder="SEO title"></div>' +
       '<div class="form-group"><label>Meta Description</label><textarea id="pubMetaDesc" style="min-height:60px" placeholder="SEO description (150-160 chars)"></textarea></div>' +
-      '<div class="form-group"><label>Target CMS</label><select id="pubTarget" required>' + (connOpts || '<option value="">No connections - add one first</option>') + '</select></div>' +
+      '<div class="form-group"><label>Target CMS</label><select id="pubTarget" required>' +
+      (connOpts || '<option value="">No connections - add one first</option>') +
+      '</select></div>' +
       '<div class="form-group"><label>Publish Status</label><select id="pubStatus"><option value="draft">Draft</option><option value="publish">Publish Immediately</option></select></div>' +
       '<div style="display:flex;gap:12px;margin-top:20px">' +
       '<button type="button" class="btn btn-secondary" onclick="App.validatePublish()">Validate</button>' +
@@ -206,8 +214,100 @@ const UI = {
           '</div>';
       });
     }
-    return '<div class="page-header"><div><h2>Publications</h2><p>Track your published content</p></div></div>' + list;
+    return '<div class="page-header"><div><h2>Publications</h2><p>Track your published content</p></div></div>' +
+      list;
   },
 
-  loading() { return '<div class="loading-page"><div class="spinner"></div></div>'; }
+  // === Google Search Console Page ===
+  gscPage(connections, topPages, activeConn) {
+    let connSection = '';
+    if (!connections || connections.length === 0) {
+      connSection = '<div class="empty-state"><div class="icon">\u{1F50D}</div><h3>No Search Console Connected</h3>' +
+        '<p>Connect your Google Search Console to view search performance data</p>' +
+        '<button class="btn btn-primary" onclick="App.connectGSC()">Connect Google Search Console</button></div>';
+    } else {
+      let connList = '';
+      connections.forEach(c => {
+        const isActive = activeConn && activeConn === c.id;
+        connList += '<div class="connection-card" style="' + (isActive ? 'border-color:var(--primary)' : '') + '">' +
+          '<div class="platform-icon" style="background:#4285f4;color:#fff">G</div>' +
+          '<div class="info"><h4>' + c.site_url + '</h4>' +
+          '<div class="meta">Connected: ' + new Date(c.created_at).toLocaleDateString() + '</div></div>' +
+          '<div class="actions">' +
+          '<button class="btn btn-sm btn-primary" onclick="App.viewGSCData(\'' + c.id + '\')">View Data</button>' +
+          '<button class="btn btn-sm btn-danger" onclick="App.deleteGSCConnection(\'' + c.id + '\')">Disconnect</button>' +
+          '</div></div>';
+      });
+      connSection = '<div class="page-header"><div><h2>Search Console</h2><p>Google Search Console performance data</p></div>' +
+        '<button class="btn btn-primary" onclick="App.connectGSC()">+ Add Property</button></div>' +
+        connList;
+    }
+
+    let dataSection = '';
+    if (activeConn && topPages) {
+      dataSection = '<div style="margin-top:24px">' +
+        '<div class="card"><div class="card-header" style="display:flex;justify-content:space-between;align-items:center"><h3>Top Pages</h3>' +
+        '<div style="display:flex;gap:8px">' +
+        '<select id="gscDays" onchange="App.viewGSCData(\'' + activeConn + '\')">' +
+        '<option value="7">Last 7 days</option>' +
+        '<option value="28" selected>Last 28 days</option>' +
+        '<option value="90">Last 90 days</option></select></div></div>' +
+        UI.gscTopPagesTable(topPages, activeConn) +
+        '</div></div>';
+    }
+
+    return connSection + dataSection;
+  },
+
+  gscTopPagesTable(pages, connId) {
+    if (!pages || pages.length === 0) {
+      return '<div style="padding:20px;text-align:center;color:var(--text-muted)">No data available for this period</div>';
+    }
+    let rows = '';
+    pages.forEach(p => {
+      rows += '<tr>' +
+        '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        '<a href="#" onclick="App.viewPageQueries(\'' + connId + '\',\'' + encodeURIComponent(p.keys[0]) + '\');return false" style="color:var(--primary)">' + p.keys[0] + '</a></td>' +
+        '<td style="text-align:right">' + (p.clicks || 0).toLocaleString() + '</td>' +
+        '<td style="text-align:right">' + (p.impressions || 0).toLocaleString() + '</td>' +
+        '<td style="text-align:right">' + ((p.ctr || 0) * 100).toFixed(1) + '%</td>' +
+        '<td style="text-align:right">' + (p.position || 0).toFixed(1) + '</td>' +
+        '</tr>';
+    });
+    return '<table class="data-table"><thead><tr>' +
+      '<th>Page</th><th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th>' +
+      '<th style="text-align:right">CTR</th><th style="text-align:right">Avg Position</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  },
+
+  gscPageQueriesModal(queries, pageUrl) {
+    let rows = '';
+    if (queries && queries.length > 0) {
+      queries.forEach(q => {
+        rows += '<tr>' +
+          '<td>' + q.keys[0] + '</td>' +
+          '<td style="text-align:right">' + (q.clicks || 0).toLocaleString() + '</td>' +
+          '<td style="text-align:right">' + (q.impressions || 0).toLocaleString() + '</td>' +
+          '<td style="text-align:right">' + ((q.ctr || 0) * 100).toFixed(1) + '%</td>' +
+          '<td style="text-align:right">' + (q.position || 0).toFixed(1) + '</td>' +
+          '</tr>';
+      });
+    }
+    const decodedUrl = decodeURIComponent(pageUrl || '');
+    return '<div class="modal-overlay" onclick="if(event.target===this)App.closeModal()">' +
+      '<div class="modal" style="max-width:800px">' +
+      '<h3>Queries for Page</h3>' +
+      '<p style="color:var(--text-muted);font-size:13px;word-break:break-all;margin-bottom:16px">' + decodedUrl + '</p>' +
+      (rows ? '<table class="data-table"><thead><tr>' +
+        '<th>Query</th><th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th>' +
+        '<th style="text-align:right">CTR</th><th style="text-align:right">Position</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p style="text-align:center;color:var(--text-muted)">No query data available</p>') +
+      '<div class="modal-actions"><button class="btn btn-secondary" onclick="App.closeModal()">Close</button></div>' +
+      '</div></div>';
+  },
+
+  loading() {
+    return '<div class="loading-page"><div class="spinner"></div></div>';
+  }
 };
