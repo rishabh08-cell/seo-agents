@@ -121,5 +121,47 @@ const API = {
 
   async auditPublication(id) {
     return this.request('POST', '/api/publish/' + id + '/audit');
+  },
+
+  // Google Search Console
+  async getGSCAuthUrl() {
+    return this.request('GET', '/api/gsc/auth-url');
+  },
+
+  async handleGSCCallback(code) {
+    return this.request('POST', '/api/gsc/callback', { code });
+  },
+
+  async getGSCSites(token) {
+    const params = new URLSearchParams({ access_token: token });
+    return this.request('GET', '/api/gsc/sites?' + params);
+  },
+
+  async connectGSCSite(site_url, access_token, refresh_token) {
+    return this.request('POST', '/api/gsc/connect', { site_url, access_token, refresh_token });
+  },
+
+  async getGSCConnections() {
+    return this.request('GET', '/api/gsc/connections');
+  },
+
+  async deleteGSCConnection(id) {
+    return this.request('DELETE', '/api/gsc/' + id);
+  },
+
+  async getGSCTopPages(id, days) {
+    const params = days ? '?days=' + days : '';
+    return this.request('GET', '/api/gsc/' + id + '/top-pages' + params);
+  },
+
+  async getGSCPageQueries(id, pageUrl, days) {
+    const params = new URLSearchParams({ url: pageUrl });
+    if (days) params.set('days', days);
+    return this.request('GET', '/api/gsc/' + id + '/page-queries?' + params);
+  },
+
+  async getGSCPerformance(id, days) {
+    const params = days ? '?days=' + days : '';
+    return this.request('GET', '/api/gsc/' + id + '/performance' + params);
   }
 };
