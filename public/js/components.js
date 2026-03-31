@@ -219,92 +219,163 @@ const UI = {
   },
 
   // === Google Search Console Page ===
-  gscPage(connections, topPages, activeConn) {
-    let connSection = '';
+  gscPage(connections, topPages, activeConn, perfData) {
     if (!connections || connections.length === 0) {
-      connSection = '<div class="empty-state"><div class="icon">\u{1F50D}</div><h3>No Search Console Connected</h3>' +
+      return '<div class="page-header"><div><h2>Search Console</h2><p>Google Search Console performance data</p></div></div>' +
+        '<div class="empty-state">' +
+        '<div class="icon">\u{1F50D}</div>' +
+        '<h3>No Search Console Connected</h3>' +
         '<p>Connect your Google Search Console to view search performance data</p>' +
-        '<button class="btn btn-primary" onclick="App.connectGSC()">Connect Google Search Console</button></div>';
-    } else {
-      let connList = '';
-      connections.forEach(c => {
-        const isActive = activeConn && activeConn === c.id;
-        connList += '<div class="connection-card" style="' + (isActive ? 'border-color:var(--primary)' : '') + '">' +
-          '<div class="platform-icon" style="background:#4285f4;color:#fff">G</div>' +
-          '<div class="info"><h4>' + c.site_url + '</h4>' +
-          '<div class="meta">Connected: ' + new Date(c.created_at).toLocaleDateString() + '</div></div>' +
-          '<div class="actions">' +
-          '<button class="btn btn-sm btn-primary" onclick="App.viewGSCData(\'' + c.id + '\')">View Data</button>' +
-          '<button class="btn btn-sm btn-danger" onclick="App.deleteGSCConnection(\'' + c.id + '\')">Disconnect</button>' +
-          '</div></div>';
+        '<button class="btn btn-primary" onclick="App.connectGSC()">Connect Google Search Console</button>' +
+        '</div>';
+    }
+
+    let connList = '';
+    connections.forEach(c => {
+      const isActive = activeConn && activeConn === c.id;
+      connList += '<div class="connection-card" style="' + (isActive ? 'border-color:var(--primary)' : '') + ';cursor:pointer" onclick="App.viewGSCData(\'' + c.id + '\')">' +
+        '<div class="platform-icon" style="background:#4285f4;color:#fff">G</div>' +
+        '<div class="info"><h4>' + c.site_url + '</h4>' +
+        '<div class="meta">Connected: ' + new Date(c.created_at).toLocaleDateString() + '</div></div>' +
+        '<div class="actions">' +
+        (isActive ? '<span class="status-badge active">Active</span>' : '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();App.viewGSCData(\'' + c.id + '\')">View Data</button>') +
+        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();App.deleteGSCConnection(\'' + c.id + '\')">Disconnect</button>' +
+        '</div></div>';
+    });
+
+    let header = '<div class="page-header"><div><h2>Search Console</h2><p>Google Search Console performance data</p></div>' +
+      '<button class="btn btn-primary" onclick="App.showGSCSitePicker()">+ Add Property</button></div>';
+
+    let summarySection = '';
+    if (activeConn && topPages && topPages.length > 0) {
+      let totalClicks = 0, totalImpressions = 0, totalCtr = 0, totalPosition = 0;
+      topPages.forEach(p => {
+        totalClicks += (p.clicks || 0);
+        totalImpressions += (p.impressions || 0);
+        totalCtr += (p.ctr || 0);
+        totalPosition += (p.position || 0);
       });
-      connSection = '<div class="page-header"><div><h2>Search Console</h2><p>Google Search Console performance data</p></div>' +
-        '<button class="btn btn-primary" onclick="App.connectGSC()">+ Add Property</button></div>' +
-        connList;
+      const avgCtr = topPages.length > 0 ? (totalCtr / topPages.length * 100).toFixed(1) : '0.0';
+      const avgPos = topPages.length > 0 ? (totalPosition / topPages.length).toFixed(1) : '0.0';
+      summarySection = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:24px 0">' +
+        '<div class="card"><div style="font-size:28px;font-weight:700;color:#4285f4">' + totalClicks.toLocaleString() + '</div><div style="color:var(--text-muted);font-size:13px;margin-top:4px">Total Clicks</div></div>' +
+        '<div class="card"><div style="font-size:28px;font-weight:700;color:#9b59b6">' + totalImpressions.toLocaleString() + '</div><div style="color:var(--text-muted);font-size:13px;margin-top:4px">Total Impressions</div></div>' +
+        '<div class="card"><div style="font-size:28px;font-weight:700;color:#2ecc71">' + avgCtr + '%</div><div style="color:var(--text-muted);font-size:13px;margin-top:4px">Avg CTR</div></div>' +
+        '<div class="card"><div style="font-size:28px;font-weight:700;color:#f39c12">' + avgPos + '</div><div style="color:var(--text-muted);font-size:13px;margin-top:4px">Avg Position</div></div>' +
+        '</div>';
+    }
+
+    let chartSection = '';
+    if (activeConn && perfData && perfData.length > 0) {
+      chartSection = '<div class="card" style="margin-bottom:24px"><div class="card-header"><h3>Performance Trend</h3></div>' +
+        '<div id="gscChart" style="padding:16px">' + UI.gscPerformanceChart(perfData) + '</div></div>';
     }
 
     let dataSection = '';
-    if (activeConn && topPages) {
-      dataSection = '<div style="margin-top:24px">' +
-        '<div class="card"><div class="card-header" style="display:flex;justify-content:space-between;align-items:center"><h3>Top Pages</h3>' +
+    if (activeConn) {
+      dataSection = '<div class="card"><div class="card-header" style="display:flex;justify-content:space-between;align-items:center"><h3>Top Pages</h3>' +
         '<div style="display:flex;gap:8px">' +
         '<select id="gscDays" onchange="App.viewGSCData(\'' + activeConn + '\')">' +
         '<option value="7">Last 7 days</option>' +
         '<option value="28" selected>Last 28 days</option>' +
         '<option value="90">Last 90 days</option></select></div></div>' +
         UI.gscTopPagesTable(topPages, activeConn) +
-        '</div></div>';
+        '</div>';
     }
 
-    return connSection + dataSection;
+    return header + connList + summarySection + chartSection + dataSection;
+  },
+
+  gscPerformanceChart(perfData) {
+    if (!perfData || perfData.length === 0) return '<div style="text-align:center;color:var(--text-muted);padding:20px">No performance data</div>';
+    const maxClicks = Math.max(...perfData.map(d => d.clicks || 0), 1);
+    const maxImpressions = Math.max(...perfData.map(d => d.impressions || 0), 1);
+    const barWidth = Math.max(Math.floor(100 / perfData.length) - 1, 2);
+    let bars = '';
+    perfData.forEach((d, i) => {
+      const date = d.keys ? d.keys[0] : '';
+      const shortDate = date.slice(5);
+      const clickH = Math.round((d.clicks || 0) / maxClicks * 120);
+      const impH = Math.round((d.impressions || 0) / maxImpressions * 120);
+      bars += '<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:flex-end;gap:2px;height:120px">' +
+        '<div style="width:' + Math.max(barWidth/2, 6) + 'px;height:' + clickH + 'px;background:#4285f4;border-radius:2px 2px 0 0" title="Clicks: ' + (d.clicks||0) + '"></div>' +
+        '<div style="width:' + Math.max(barWidth/2, 6) + 'px;height:' + impH + 'px;background:rgba(155,89,182,0.5);border-radius:2px 2px 0 0" title="Impressions: ' + (d.impressions||0) + '"></div>' +
+        '</div>' +
+        (i % Math.ceil(perfData.length / 7) === 0 ? '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;white-space:nowrap">' + shortDate + '</div>' : '<div style="height:18px"></div>') +
+        '</div>';
+    });
+    return '<div style="display:flex;gap:2px;align-items:flex-end;margin-bottom:8px">' +
+      '<div style="display:flex;flex-direction:column;justify-content:space-between;height:120px;margin-right:8px;font-size:10px;color:var(--text-muted)"><span>' + maxClicks.toLocaleString() + '</span><span>0</span></div>' +
+      bars + '</div>' +
+      '<div style="display:flex;gap:16px;justify-content:center;margin-top:12px;font-size:12px">' +
+      '<span><span style="display:inline-block;width:12px;height:12px;background:#4285f4;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Clicks</span>' +
+      '<span><span style="display:inline-block;width:12px;height:12px;background:rgba(155,89,182,0.5);border-radius:2px;margin-right:4px;vertical-align:middle"></span>Impressions</span></div>';
   },
 
   gscTopPagesTable(pages, connId) {
-    if (!pages || pages.length === 0) {
-      return '<div style="padding:20px;text-align:center;color:var(--text-muted)">No data available for this period</div>';
-    }
+    if (!pages || pages.length === 0) return '<div style="padding:20px;text-align:center;color:var(--text-muted)">No data available for this period</div>';
     let rows = '';
     pages.forEach(p => {
-      rows += '<tr>' +
-        '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-        '<a href="#" onclick="App.viewPageQueries(\'' + connId + '\',\'' + encodeURIComponent(p.keys[0]) + '\');return false" style="color:var(--primary)">' + p.keys[0] + '</a></td>' +
+      rows += '<tr><td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        '<a href="#" onclick="App.viewPageQueries(\'' + connId + '\',\'' + encodeURIComponent(p.keys[0]) + '\');return false" style="color:var(--primary)">' +
+        p.keys[0] + '</a></td>' +
         '<td style="text-align:right">' + (p.clicks || 0).toLocaleString() + '</td>' +
         '<td style="text-align:right">' + (p.impressions || 0).toLocaleString() + '</td>' +
         '<td style="text-align:right">' + ((p.ctr || 0) * 100).toFixed(1) + '%</td>' +
-        '<td style="text-align:right">' + (p.position || 0).toFixed(1) + '</td>' +
-        '</tr>';
+        '<td style="text-align:right">' + (p.position || 0).toFixed(1) + '</td></tr>';
     });
-    return '<table class="data-table"><thead><tr>' +
-      '<th>Page</th><th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th>' +
-      '<th style="text-align:right">CTR</th><th style="text-align:right">Avg Position</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table>';
+    return '<table class="data-table"><thead><tr><th>Page</th><th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th><th style="text-align:right">CTR</th><th style="text-align:right">Avg Position</th></tr></thead><tbody>' + rows + '</tbody></table>';
   },
 
   gscPageQueriesModal(queries, pageUrl) {
     let rows = '';
     if (queries && queries.length > 0) {
       queries.forEach(q => {
-        rows += '<tr>' +
-          '<td>' + q.keys[0] + '</td>' +
-          '<td style="text-align:right">' + (q.clicks || 0).toLocaleString() + '</td>' +
+        rows += '<tr><td>' + q.keys[0] + '</td><td style="text-align:right">' + (q.clicks || 0).toLocaleString() + '</td>' +
           '<td style="text-align:right">' + (q.impressions || 0).toLocaleString() + '</td>' +
           '<td style="text-align:right">' + ((q.ctr || 0) * 100).toFixed(1) + '%</td>' +
-          '<td style="text-align:right">' + (q.position || 0).toFixed(1) + '</td>' +
-          '</tr>';
+          '<td style="text-align:right">' + (q.position || 0).toFixed(1) + '</td></tr>';
       });
     }
     const decodedUrl = decodeURIComponent(pageUrl || '');
     return '<div class="modal-overlay" onclick="if(event.target===this)App.closeModal()">' +
-      '<div class="modal" style="max-width:800px">' +
-      '<h3>Queries for Page</h3>' +
+      '<div class="modal" style="max-width:800px"><h3>Queries for Page</h3>' +
       '<p style="color:var(--text-muted);font-size:13px;word-break:break-all;margin-bottom:16px">' + decodedUrl + '</p>' +
-      (rows ? '<table class="data-table"><thead><tr>' +
-        '<th>Query</th><th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th>' +
-        '<th style="text-align:right">CTR</th><th style="text-align:right">Position</th>' +
-        '</tr></thead><tbody>' + rows + '</tbody></table>'
+      (rows ? '<table class="data-table"><thead><tr><th>Query</th><th style="text-align:right">Clicks</th><th style="text-align:right">Impressions</th><th style="text-align:right">CTR</th><th style="text-align:right">Position</th></tr></thead><tbody>' + rows + '</tbody></table>'
         : '<p style="text-align:center;color:var(--text-muted)">No query data available</p>') +
-      '<div class="modal-actions"><button class="btn btn-secondary" onclick="App.closeModal()">Close</button></div>' +
-      '</div></div>';
+      '<div class="modal-actions"><button class="btn btn-secondary" onclick="App.closeModal()">Close</button></div></div></div>';
+  },
+
+  gscSitePickerModal(sites) {
+    let siteList = '';
+    if (!sites || sites.length === 0) {
+      siteList = '<p style="text-align:center;color:var(--text-muted);padding:20px">No sites found in your Google Search Console account.</p>';
+    } else {
+      sites.forEach(s => {
+        const isDomain = s.site_url.startsWith('sc-domain:');
+        const icon = isDomain ? '\u{1F310}' : '\u{1F517}';
+        const typeLabel = isDomain ? 'Domain property' : 'URL prefix';
+        const permLabel = s.permission_level === 'siteOwner' ? 'Owner' : s.permission_level === 'siteFullUser' ? 'Full' : s.permission_level === 'siteRestrictedUser' ? 'Restricted' : s.permission_level;
+        const permClass = s.permission_level === 'siteOwner' ? 'active' : s.permission_level === 'siteFullUser' ? 'active' : 'pending';
+        siteList += '<div class="connection-card" style="cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor=\'var(--primary)\'" onmouseout="this.style.borderColor=\'\'" onclick="App.selectGSCSite(\'' + s.site_url.replace(/'/g, "\\\'") + '\')">' +
+          '<div class="platform-icon" style="background:#4285f4;color:#fff;font-size:20px">' + icon + '</div>' +
+          '<div class="info"><h4>' + s.site_url + '</h4><div class="meta">' + typeLabel + '</div></div>' +
+          '<div class="actions"><span class="status-badge ' + permClass + '">' + permLabel + '</span></div></div>';
+      });
+    }
+    return '<div class="modal-overlay" onclick="if(event.target===this)App.closeModal()">' +
+      '<div class="modal" style="max-width:600px"><h3>Select a Search Console Property</h3>' +
+      '<p style="color:var(--text-muted);margin-bottom:16px">Choose a property to connect from your Google Search Console account</p>' +
+      '<div id="gscSiteList">' + siteList + '</div>' +
+      '<div class="modal-actions"><button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button></div></div></div>';
+  },
+
+  gscSitePickerLoading() {
+    return '<div class="modal-overlay" onclick="if(event.target===this)App.closeModal()">' +
+      '<div class="modal" style="max-width:600px"><h3>Loading Properties...</h3>' +
+      '<div class="loading-page" style="min-height:120px"><div class="spinner"></div></div>' +
+      '<p style="text-align:center;color:var(--text-muted)">Fetching your Google Search Console properties...</p></div></div>';
   },
 
   loading() {
