@@ -10,8 +10,8 @@ router.get('/auth-url', requireAuth, (_req: AuthRequest, res: Response) => {
   res.json({ url: getGSCAuthUrl() });
 });
 
-router.get('/callback', requireAuth, async (req: AuthRequest, res: Response) => {
-  const { code } = req.query;
+router.post('/callback', requireAuth, async (req: AuthRequest, res: Response) => {
+  const { code } = req.body;
   if (!code || typeof code !== 'string') { res.status(400).json({ error: 'Missing authorization code' }); return; }
   try {
     const tokens = await exchangeCodeForTokens(code);
