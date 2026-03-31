@@ -132,13 +132,12 @@ const API = {
     return this.request('POST', '/api/gsc/callback', { code });
   },
 
-  async getGSCSites(token) {
-    const params = new URLSearchParams({ access_token: token });
-    return this.request('GET', '/api/gsc/sites?' + params);
+  async getGSCSites() {
+    return this.request('GET', '/api/gsc/sites');
   },
 
-  async connectGSCSite(site_url, access_token, refresh_token) {
-    return this.request('POST', '/api/gsc/connect', { site_url, access_token, refresh_token });
+  async connectGSCSite(site_url) {
+    return this.request('POST', '/api/gsc/connect', { site_url });
   },
 
   async getGSCConnections() {
