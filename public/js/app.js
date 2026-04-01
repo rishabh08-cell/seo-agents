@@ -163,38 +163,102 @@ const App = {
 
   // Google Search Console
   _gscActiveConn: null,
+
   async connectGSC() {
+    try {
+      UI.toast('Checking Google connection...', 'info');
+      const sitesData = await API.getGSCSites();
+      if (sitesData.sites && sitesData.sites.length > 0) {
+        App.showModal(UI.gscSitePickerModal(sitesData.sites));
+        return;
+      }
+    } catch (e) {
+      // No tokens yet - need OAuth
+    }
     try {
       UI.toast('Getting Google authorization URL...', 'info');
       const r = await API.getGSCAuthUrl();
-      if (r.url) { window.open(r.url, '_blank', 'width=600,height=700'); UI.toast('Complete Google sign-in in the popup, then refresh.', 'info'); }
-      else { UI.toast('Could not get authorization URL. Check Google OAuth credentials.', 'error'); }
-    } catch (err) { UI.toast(err.message, 'error'); }
+      if (r.url) {
+        window.open(r.url, '_blank', 'width=600,height=700');
+        UI.toast('Complete Google sign-in in the popup, then refresh.', 'info');
+      } else {
+        UI.toast('Could not get authorization URL. Check Google OAuth credentials.', 'error');
+      }
+    } catch (err) {
+      UI.toast(err.message, 'error');
+    }
   },
+
+  async showGSCSitePicker() {
+    try {
+      App.showModal(UI.gscSitePickerLoading());
+      const sitesData = await API.getGSCSites();
+      if (sitesData.sites && sitesData.sites.length > 0) {
+        App.closeModal();
+        App.showModal(UI.gscSitePickerModal(sitesData.sites));
+      } else {
+        App.closeModal();
+        UI.toast('No properties found. Make sure you have sites in Google Search Console.', 'warning');
+      }
+    } catch (err) {
+      App.closeModal();
+      App.connectGSC();
+    }
+  },
+
+  async selectGSCSite(siteUrl) {
+    try {
+      UI.toast('Connecting ' + siteUrl + '...', 'info');
+      const r = await API.connectGSCSite(siteUrl);
+      App.closeModal();
+      UI.toast('Connected ' + siteUrl + ' successfully!', 'success');
+      App._gscActiveConn = r.connection ? r.connection.id : null;
+      Router.navigate('/gsc');
+    } catch (err) {
+      UI.toast('Failed to connect site: ' + err.message, 'error');
+    }
+  },
+
   async viewGSCData(connId) {
     this._gscActiveConn = connId;
     try {
       const daysEl = document.getElementById('gscDays');
       const days = daysEl ? daysEl.value : 28;
-      const [conns, topPages] = await Promise.all([API.getGSCConnections(), API.getGSCTopPages(connId, days)]);
-      App.render(UI.layout(UI.gscPage(conns.connections, topPages.rows || [], connId), 'gsc'));
-    } catch (err) { UI.toast(err.message, 'error'); }
+      const [conns, topPages, perfData] = await Promise.all([
+        API.getGSCConnections(),
+        API.getGSCTopPages(connId, days),
+        API.getGSCPerformance(connId, days)
+      ]);
+      App.render(UI.layout(UI.gscPage(conns.connections, topPages.rows || [], connId, perfData.rows || []), 'gsc'));
+    } catch (err) {
+      UI.toast(err.message, 'error');
+    }
   },
+
   async viewPageQueries(connId, encodedUrl) {
     try {
       const pageUrl = decodeURIComponent(encodedUrl);
       UI.toast('Loading queries...', 'info');
       const r = await API.getGSCPageQueries(connId, pageUrl);
       App.showModal(UI.gscPageQueriesModal(r.rows || [], encodedUrl));
-    } catch (err) { UI.toast(err.message, 'error'); }
+    } catch (err) {
+      UI.toast(err.message, 'error');
+    }
   },
+
   async deleteGSCConnection(id) {
     if (!confirm('Disconnect this Search Console property?')) return;
-    try { await API.deleteGSCConnection(id); UI.toast('Disconnected', 'success'); Router.navigate('/gsc'); } catch (err) { UI.toast(err.message, 'error'); }
+    try {
+      await API.deleteGSCConnection(id);
+      if (App._gscActiveConn === id) App._gscActiveConn = null;
+      UI.toast('Disconnected', 'success');
+      Router.navigate('/gsc');
+    } catch (err) {
+      UI.toast(err.message, 'error');
+    }
   }
 };
 
-// Routes
 Router.add('/login', () => { App.render(UI.loginPage()); App.bindLogin(); });
 Router.add('/signup', () => { App.render(UI.signupPage()); App.bindSignup(); });
 
@@ -239,12 +303,17 @@ Router.add('/gsc', async () => {
     const connections = data.connections || [];
     if (connections.length > 0 && !App._gscActiveConn) App._gscActiveConn = connections[0].id;
     if (App._gscActiveConn) {
-      const topPages = await API.getGSCTopPages(App._gscActiveConn, 28);
-      App.render(UI.layout(UI.gscPage(connections, topPages.rows || [], App._gscActiveConn), 'gsc'));
+      const [topPages, perfData] = await Promise.all([
+        API.getGSCTopPages(App._gscActiveConn, 28),
+        API.getGSCPerformance(App._gscActiveConn, 28)
+      ]);
+      App.render(UI.layout(UI.gscPage(connections, topPages.rows || [], App._gscActiveConn, perfData.rows || []), 'gsc'));
     } else {
-      App.render(UI.layout(UI.gscPage(connections, null, null), 'gsc'));
+      App.render(UI.layout(UI.gscPage(connections, null, null, null), 'gsc'));
     }
-  } catch (err) { App.render(UI.layout(UI.gscPage(null, null, null), 'gsc')); }
+  } catch (err) {
+    App.render(UI.layout(UI.gscPage(null, null, null, null), 'gsc'));
+  }
 });
 
 // Handle GSC OAuth callback
@@ -252,11 +321,23 @@ if (window.location.search.includes('code=')) {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   if (code) {
-    API.handleGSCCallback(code).then(() => {
-      UI.toast('Google Search Console connected!', 'success');
+    API.handleGSCCallback(code).then(async () => {
+      UI.toast('Google account connected!', 'success');
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
-      Router.navigate('/gsc');
-    }).catch(err => { UI.toast('GSC connection failed: ' + err.message, 'error'); });
+      try {
+        const sitesData = await API.getGSCSites();
+        if (sitesData.sites && sitesData.sites.length > 0) {
+          App.showModal(UI.gscSitePickerModal(sitesData.sites));
+        } else {
+          UI.toast('No GSC properties found. Add a property in Google Search Console first.', 'warning');
+          Router.navigate('/gsc');
+        }
+      } catch (e) {
+        Router.navigate('/gsc');
+      }
+    }).catch(err => {
+      UI.toast('GSC connection failed: ' + err.message, 'error');
+    });
   }
 }
 
