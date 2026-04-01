@@ -271,6 +271,13 @@ const UI = {
         '<div id="gscChart" style="padding:16px">' + UI.gscPerformanceChart(perfData) + '</div></div>';
     }
 
+
+    let trendSection = '';
+    if (performanceData && performanceData.length > 0) {
+      trendSection = '<div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Performance Trend</h3></div>' +
+        '<div id="gscTrendChart" style="height:200px;position:relative;overflow:hidden">' + UI.gscTrendChart(performanceData) + '</div></div>';
+    }
+
     let dataSection = '';
     if (activeConn) {
       dataSection = '<div class="card"><div class="card-header" style="display:flex;justify-content:space-between;align-items:center"><h3>Top Pages</h3>' +
@@ -311,6 +318,37 @@ const UI = {
       '<div style="display:flex;gap:16px;justify-content:center;margin-top:12px;font-size:12px">' +
       '<span><span style="display:inline-block;width:12px;height:12px;background:#4285f4;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Clicks</span>' +
       '<span><span style="display:inline-block;width:12px;height:12px;background:rgba(155,89,182,0.5);border-radius:2px;margin-right:4px;vertical-align:middle"></span>Impressions</span></div>';
+  },
+
+
+  gscTrendChart(data) {
+    if (!data || data.length === 0) return '<div style="padding:20px;text-align:center;color:var(--text-muted)">No trend data</div>';
+    const maxClicks = Math.max(...data.map(d => d.clicks || 0), 1);
+    const maxImpressions = Math.max(...data.map(d => d.impressions || 0), 1);
+    const w = 100, h = 160, pad = 30;
+    let cPath = '', iPath = '';
+    const sp = data.length > 1 ? (w - 2) / (data.length - 1) : 0;
+    data.forEach((d, i) => {
+      const x = (i * sp + 1).toFixed(2);
+      const yC = (h - pad - ((d.clicks || 0) / maxClicks) * (h - pad - 10)).toFixed(2);
+      const yI = (h - pad - ((d.impressions || 0) / maxImpressions) * (h - pad - 10)).toFixed(2);
+      cPath += (i === 0 ? 'M' : 'L') + x + ',' + yC;
+      iPath += (i === 0 ? 'M' : 'L') + x + ',' + yI;
+    });
+    let labels = '';
+    const step = Math.max(1, Math.floor(data.length / 6));
+    data.forEach((d, i) => {
+      if (i % step === 0 || i === data.length - 1) {
+        const x = (i * sp + 1).toFixed(2);
+        const lbl = (d.keys && d.keys[0]) ? d.keys[0].substring(5) : '';
+        labels += '<text x="' + x + '" y="' + (h - 5) + '" fill="var(--text-dim)" font-size="3" text-anchor="middle">' + lbl + '</text>';
+      }
+    });
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:100%" preserveAspectRatio="none">' +
+      '<path d="' + iPath + '" fill="none" stroke="#9b59b6" stroke-width="0.5" opacity="0.6"/>' +
+      '<path d="' + cPath + '" fill="none" stroke="#4285f4" stroke-width="0.8"/>' + labels + '</svg>' +
+      '<div style="position:absolute;top:8px;right:12px;display:flex;gap:16px;font-size:11px">' +
+      '<span style="color:#4285f4">\u25CF Clicks</span><span style="color:#9b59b6">\u25CF Impressions</span></div>';
   },
 
   gscTopPagesTable(pages, connId) {
