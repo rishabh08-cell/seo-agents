@@ -4,7 +4,7 @@ const UI = {
     const c = document.getElementById('toasts');
     const t = document.createElement('div');
     t.className = 'toast ' + (type || 'info');
-    t.textContent = msg;
+    t.textContent = msg
     c.appendChild(t);
     setTimeout(() => t.remove(), 4000);
   },
@@ -273,9 +273,9 @@ const UI = {
 
 
     let trendSection = '';
-    if (performanceData && performanceData.length > 0) {
+    if (perfData && perfData.length > 0) {
       trendSection = '<div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Performance Trend</h3></div>' +
-        '<div id="gscTrendChart" style="height:200px;position:relative;overflow:hidden">' + UI.gscTrendChart(performanceData) + '</div></div>';
+        '<div id="gscTrendChart" style="height:200px;position:relative;overflow:hidden">' + UI.gscTrendChart(perfData) + '</div></div>';
     }
 
     let dataSection = '';
